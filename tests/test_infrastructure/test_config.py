@@ -72,34 +72,34 @@ class TestConstantes:
 
 
 class TestFailFast:
-    """Validación de fail-fast en main.py.
-
-    Estos tests verifican que main() valida las variables de entorno
-    antes de levantar la UI.
-    """
+    """Validación de fail-fast en main.py — función validar_entorno()."""
 
     def test_fail_fast_con_database_url_faltante(self, monkeypatch):
-        """Si falta DATABASE_URL, main() debe salir con código 1."""
+        """Si falta DATABASE_URL, validar_entorno() retorna False."""
+        monkeypatch.setattr("monitor_licitaciones.main.load_dotenv", lambda: None)
         monkeypatch.delenv("DATABASE_URL", raising=False)
         monkeypatch.setenv("TICKET_MERCADO_PUBLICO", "test_ticket")
-        monkeypatch.setattr("sys.argv", ["test"])
 
-        with pytest.raises(SystemExit) as exc:
-            from monitor_licitaciones.main import main
+        from monitor_licitaciones.main import validar_entorno
 
-            main()
-
-        assert exc.value.code == 1
+        assert validar_entorno() is False
 
     def test_fail_fast_con_ticket_faltante(self, monkeypatch):
-        """Si falta TICKET_MERCADO_PUBLICO, main() debe salir con código 1."""
+        """Si falta TICKET_MERCADO_PUBLICO, validar_entorno() retorna False."""
+        monkeypatch.setattr("monitor_licitaciones.main.load_dotenv", lambda: None)
         monkeypatch.setenv("DATABASE_URL", "sqlite:///test.db")
         monkeypatch.delenv("TICKET_MERCADO_PUBLICO", raising=False)
-        monkeypatch.setattr("sys.argv", ["test"])
 
-        with pytest.raises(SystemExit) as exc:
-            from monitor_licitaciones.main import main
+        from monitor_licitaciones.main import validar_entorno
 
-            main()
+        assert validar_entorno() is False
 
-        assert exc.value.code == 1
+    def test_fail_fast_con_ambas_presentes_retorna_true(self, monkeypatch):
+        """Con ambas variables, validar_entorno() retorna True."""
+        monkeypatch.setattr("monitor_licitaciones.main.load_dotenv", lambda: None)
+        monkeypatch.setenv("DATABASE_URL", "sqlite:///test.db")
+        monkeypatch.setenv("TICKET_MERCADO_PUBLICO", "test_ticket")
+
+        from monitor_licitaciones.main import validar_entorno
+
+        assert validar_entorno() is True

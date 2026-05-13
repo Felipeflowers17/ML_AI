@@ -180,3 +180,81 @@ class TestPausaEntrePeticiones:
             f"Ninguna sleep alcanzó el mínimo de {API_PAUSA_SEGUNDOS}s. "
             f"Sleeps registradas: {sleeps}"
         )
+
+
+class TestObtenerOrganismos:
+    """Tests para ClienteAPI.obtener_organismos() con retry."""
+
+    URL_ORGANISMOS = (
+        "https://api.mercadopublico.cl/servicios/v1/publico/"
+        "BuscarComprador.json"
+    )
+
+    def test_obtener_organismos_exitoso(self, mock_resp):
+        """Mock 200 con listado, retorna datos parseados."""
+        mock_resp.get(
+            self.URL_ORGANISMOS,
+            json={
+                "Listado": [
+                    {
+                        "CodigoOrganismo": "ORG1",
+                        "NombreOrganismo": "Organismo Uno",
+                    },
+                    {
+                        "CodigoOrganismo": "ORG2",
+                        "NombreOrganismo": "Organismo Dos",
+                    },
+                ]
+            },
+            status=200,
+        )
+
+        cliente = ClienteAPI(ticket="test_ticket")
+        resultado = cliente.obtener_organismos()
+
+        assert len(resultado) == 2
+        assert resultado[0]["CodigoOrganismo"] == "ORG1"
+        assert resultado[1]["NombreOrganismo"] == "Organismo Dos"
+
+    def test_obtener_organismos_retry_en_500(self, mock_resp):
+        """Mock 500 seguido de 200, retorna datos (retry funciona)."""
+        mock_resp.get(self.URL_ORGANISMOS, status=500)
+        mock_resp.get(
+            self.URL_ORGANISMOS,
+            json={
+                "Listado": [
+                    {
+                        "CodigoOrganismo": "ORG1",
+                        "NombreOrganismo": "Recuperado",
+                    }
+                ]
+            },
+            status=200,
+        )
+
+        cliente = ClienteAPI(ticket="test_ticket")
+        resultado = cliente.obtener_organismos()
+
+        assert len(resultado) == 1
+        assert resultado[0]["CodigoOrganismo"] == "ORG1"
+
+    def test_obtener_organismos_agota_reintentos(self, mock_resp):
+        """3 mocks 500 consecutivos, retorna [] sin excepción."""
+        from monitor_licitaciones.config import API_MAX_INTENTOS
+
+        for _ in range(API_MAX_INTENTOS):
+            mock_resp.get(self.URL_ORGANISMOS, status=500)
+
+        cliente = ClienteAPI(ticket="test_ticket")
+        resultado = cliente.obtener_organismos()
+
+        assert resultado == []
+
+    def test_obtener_organismos_404_retorna_vacio(self, mock_resp):
+        """404 retorna [] (error definitivo, no reintenta)."""
+        mock_resp.get(self.URL_ORGANISMOS, status=404)
+
+        cliente = ClienteAPI(ticket="test_ticket")
+        resultado = cliente.obtener_organismos()
+
+        assert resultado == []

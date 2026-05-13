@@ -6,7 +6,7 @@ positiva, y persiste los resultados en la base de datos.
 """
 
 from datetime import datetime, timedelta
-from typing import List
+from typing import Any, List
 
 from PySide6.QtCore import QThread, Signal
 
@@ -23,6 +23,21 @@ from monitor_licitaciones.infrastructure.database.repositorio_licitaciones impor
 from monitor_licitaciones.infrastructure.database.repositorio_reglas import (
     RepositorioReglas,
 )
+
+
+def _parsear_fecha_api(valor: Any) -> datetime | None:
+    """Convierte un string de fecha de la API a ``datetime`` o ``None``.
+
+    La API de Mercado Público retorna fechas en formato ISO 8601.
+    Si el valor es ``None`` o inválido, retorna ``None`` sin lanzar
+    excepción.
+    """
+    if not valor or not isinstance(valor, str):
+        return None
+    try:
+        return datetime.fromisoformat(valor)
+    except (ValueError, TypeError):
+        return None
 
 
 class ExtraccionWorker(QThread):
@@ -121,11 +136,16 @@ class ExtraccionWorker(QThread):
                         puntaje_org = organismos.get(codigo_org, 0)
                         score_total = score_resumen + score_detalle + puntaje_org
 
+                        fecha_publicacion = _parsear_fecha_api(
+                            detalle.get("FechaPublicacion")
+                        )
+
                         datos = {
                             "codigo_externo": codigo,
                             "nombre": nombre,
                             "descripcion": descripcion,
                             "detalle_productos": productos_str,
+                            "fecha_publicacion": fecha_publicacion,
                             "score_resumen": score_resumen,
                             "score_detalle": score_detalle,
                             "score_total": score_total,
@@ -145,6 +165,7 @@ class ExtraccionWorker(QThread):
                             "justificacion_score": "; ".join(motivos_resumen),
                             "etapa": "candidata",
                             "tiene_detalle": False,
+                            "fecha_publicacion": None,
                         }
                 else:
                     # Sin coincidencia en título — ignorar
@@ -155,6 +176,7 @@ class ExtraccionWorker(QThread):
                         "score_total": 0,
                         "etapa": "ignorada",
                         "tiene_detalle": False,
+                        "fecha_publicacion": None,
                     }
 
                 self._repo_licitaciones.upsert(datos)

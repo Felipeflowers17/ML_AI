@@ -43,14 +43,26 @@ class ClienteAPI:
             time.sleep(API_PAUSA_SEGUNDOS - transcurrido)
 
     def _request(
-        self, params: dict[str, str] | None = None
+        self,
+        params: dict[str, str] | None = None,
+        url: str | None = None,
     ) -> requests.Response | None:
-        """Ejecuta una petición GET con reintentos y backoff."""
+        """Ejecuta una petición GET con reintentos y backoff.
+
+        Args:
+            params: Parámetros de la query string.
+            url: URL del endpoint. Si es ``None``, usa ``self.BASE_URL``.
+
+        Returns:
+            Response si la petición fue exitosa (200) o definitiva (404),
+            ``None`` si se agotaron los reintentos.
+        """
         self._esperar_pausa()
+        base_url = url or self.BASE_URL
         for intento in range(1, API_MAX_INTENTOS + 1):
             try:
                 resp = requests.get(
-                    self.BASE_URL,
+                    base_url,
                     params=params,
                     timeout=API_TIMEOUT_SEGUNDOS,
                 )
@@ -139,15 +151,27 @@ class ClienteAPI:
     def obtener_organismos(self) -> list[dict[str, Any]]:
         """Obtiene el catálogo de organismos (BuscarComprador).
 
+        Usa ``self._request()`` con backoff exponencial, consistente con
+        los demás métodos del cliente.
+
         Usado solo por el comando ``seed``, no en extracción rutinaria.
         """
         url = "https://api.mercadopublico.cl/servicios/v1/publico/BuscarComprador.json"
         params = {"ticket": self._ticket}
+        resp = self._request(params, url=url)
+        if resp is None:
+            logger.error(
+                "Error al obtener organismos: agotados reintentos"
+            )
+            return []
+        if resp.status_code != 200:
+            logger.error(
+                "Error al obtener organismos: HTTP {}", resp.status_code
+            )
+            return []
         try:
-            resp = requests.get(url, params=params, timeout=API_TIMEOUT_SEGUNDOS)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("Listado", [])
+            data = resp.json()
+            return data.get("Listado", [])
         except Exception as e:
-            logger.error("Error al obtener organismos: {}", e)
-        return []
+            logger.error("Error al parsear organismos: {}", e)
+            return []

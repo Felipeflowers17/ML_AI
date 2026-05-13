@@ -36,9 +36,10 @@ class TablaLicitaciones(QWidget):
 
     etapa_cambiada = Signal(str, str)
 
-    def __init__(self, gestor_pipeline, parent=None):
+    def __init__(self, gestor_pipeline, repo_licitaciones=None, parent=None):
         super().__init__(parent)
         self._gestor_pipeline = gestor_pipeline
+        self._repo_licitaciones = repo_licitaciones
         self._datos = []
         self._pagina_actual = 0
 
@@ -225,16 +226,22 @@ class TablaLicitaciones(QWidget):
 
     # ── Doble clic ───────────────────────────────────────────────────────
 
-    def _on_doble_clic(self, fila, columna):
+    def _on_doble_clic(self, fila: int, columna: int) -> None:
         """Maneja el doble clic en una fila.
 
-        Placeholder: abre el diálogo de ficha técnica con detalle de la
-        licitación (descripción, productos, justificación del score).
+        Abre el diálogo de ficha técnica con detalle de la licitación
+        (nombre, descripción, productos, scores, justificación, etc.).
         """
         if fila < 0 or fila >= len(self._datos):
             return
 
-        # TODO: Implementar diálogo de ficha técnica (tarea futura)
-        # lic = self._datos[fila]
-        # dialog = FichaTecnicaDialog(lic, self)
-        # dialog.exec_()
+        if self._repo_licitaciones is None:
+            return
+
+        codigo = self._datos[fila].codigo_externo
+        from monitor_licitaciones.ui.dialogs.ficha_tecnica import (
+            FichaTecnicaDialog,
+        )
+
+        dialog = FichaTecnicaDialog(codigo, self._repo_licitaciones, self)
+        dialog.exec_()

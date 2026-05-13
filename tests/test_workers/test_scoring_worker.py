@@ -222,3 +222,118 @@ class TestScoringWorker:
         # mapear_reglas debe haberse llamado con las palabras clave del repo
         mock_mapear.assert_called_once()
         worker.wait(1000)
+
+    def test_error_en_run_emite_error(
+        self,
+        qtbot: QtBot,
+        mock_repo_lic,
+        mock_repo_reglas,
+        mock_gestor,
+    ):
+        """Cuando obtener_palabras_clave() lanza excepción, emite error."""
+        from monitor_licitaciones.workers.scoring_worker import ScoringWorker
+
+        mock_repo_reglas.obtener_palabras_clave.side_effect = Exception(
+            "DB connection error"
+        )
+
+        worker = ScoringWorker(
+            repo_licitaciones=mock_repo_lic,
+            repo_reglas=mock_repo_reglas,
+            gestor_reglas=mock_gestor,
+        )
+        spy_error = QSignalSpy(worker.error)
+
+        worker.start()
+        ok = worker.wait(3000)
+
+        assert ok, "Worker no terminó tras error"
+        assert spy_error.count() >= 1
+
+        worker.wait(500)
+
+    def test_puntaje_organismo_se_incluye_en_total(
+        self,
+        qtbot: QtBot,
+        mock_repo_lic,
+        mock_repo_reglas,
+        mock_gestor,
+    ):
+        """Cuando organismo tiene puntaje_fijo, se suma al score_total."""
+        from monitor_licitaciones.workers.scoring_worker import ScoringWorker
+
+        lic = MagicMock()
+        lic.codigo_externo = "L1"
+        lic.nombre = "Sillas de oficina"
+        lic.descripcion = "Compra de sillas"
+        lic.detalle_productos = ""
+        lic.codigo_organismo = "ORG1"
+
+        mock_repo_lic.obtener_activas_en_pipeline.return_value = [lic]
+
+        org_mock = MagicMock()
+        org_mock.codigo = "ORG1"
+        org_mock.puntaje_fijo = 15
+        mock_repo_reglas.obtener_organismos.return_value = [org_mock]
+
+        with patch(
+            "monitor_licitaciones.workers.scoring_worker.evaluar_titulo",
+            return_value=(10, ["[TÍTULO] 'silla' (+10)"]),
+        ), patch(
+            "monitor_licitaciones.workers.scoring_worker.evaluar_detalle",
+            return_value=(5, ["[DESC] 'silla' (+5)"]),
+        ):
+            worker = ScoringWorker(
+                repo_licitaciones=mock_repo_lic,
+                repo_reglas=mock_repo_reglas,
+                gestor_reglas=mock_gestor,
+            )
+            with qtbot.waitSignal(worker.finalizado, timeout=5000):
+                worker.start()
+
+        # score_total = 10 (título) + 5 (detalle) + 15 (organismo) = 30
+        mock_repo_lic.actualizar_score.assert_called_once()
+        _, kwargs = mock_repo_lic.actualizar_score.call_args
+        assert kwargs["score_total"] == 30
+
+        worker.wait(1000)
+
+    def test_codigo_organismo_none_usa_cero(
+        self,
+        qtbot: QtBot,
+        mock_repo_lic,
+        mock_repo_reglas,
+        mock_gestor,
+    ):
+        """Cuando codigo_organismo es None, puntaje_org = 0."""
+        from monitor_licitaciones.workers.scoring_worker import ScoringWorker
+
+        lic = MagicMock()
+        lic.codigo_externo = "L1"
+        lic.nombre = "Test"
+        lic.descripcion = ""
+        lic.detalle_productos = ""
+        lic.codigo_organismo = None
+
+        mock_repo_lic.obtener_activas_en_pipeline.return_value = [lic]
+
+        with patch(
+            "monitor_licitaciones.workers.scoring_worker.evaluar_titulo",
+            return_value=(5, []),
+        ), patch(
+            "monitor_licitaciones.workers.scoring_worker.evaluar_detalle",
+            return_value=(0, []),
+        ):
+            worker = ScoringWorker(
+                repo_licitaciones=mock_repo_lic,
+                repo_reglas=mock_repo_reglas,
+                gestor_reglas=mock_gestor,
+            )
+            with qtbot.waitSignal(worker.finalizado, timeout=5000):
+                worker.start()
+
+        mock_repo_lic.actualizar_score.assert_called_once()
+        _, kwargs = mock_repo_lic.actualizar_score.call_args
+        assert kwargs["score_total"] == 5  # solo score_resumen
+
+        worker.wait(1000)

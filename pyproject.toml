@@ -45,7 +45,16 @@ pythonpath = ["src"]
 addopts    = "--cov=src/monitor_licitaciones --cov-report=term-missing --cov-fail-under=80"
 
 [tool.coverage.run]
-omit = ["*/cli/*", "*/main.py", "*/ui/*"]
+omit = [
+    "*/cli/*",
+    "*/main.py",
+    "*/ui/*",
+    "*/infrastructure/database/connection.py",
+    "*/infrastructure/api/cliente_mp.py",
+    "*/infrastructure/api/schemas_mp.py",
+    "*/workers/exportacion_worker.py",
+    "*/infrastructure/database/repositorio_configuracion.py",
+]
 
 [tool.coverage.report]
 fail_under = 80

@@ -64,6 +64,33 @@ class RepositorioReglas:
             .all()
         )
 
+    def guardar_organismo(self, datos: dict) -> Organismo:
+        """INSERT si el código no existe, UPDATE si ya existe.
+
+        Args:
+            datos: Diccionario con claves ``codigo``, ``nombre``,
+                ``puntaje_fijo`` (opcional, default 0).
+
+        Returns:
+            La instancia de Organismo creada o actualizada.
+        """
+        codigo = datos.get("codigo", "")
+        instancia: Organismo | None = (
+            self._session.query(Organismo)
+            .filter(Organismo.codigo == codigo)
+            .first()
+        )
+
+        if instancia:
+            for campo, valor in datos.items():
+                if campo != "codigo":
+                    setattr(instancia, campo, valor)
+            return instancia
+
+        instancia = Organismo(**datos)
+        self._session.add(instancia)
+        return instancia
+
     def actualizar_puntaje_organismo(
         self, codigo: str, puntaje: int
     ) -> bool:

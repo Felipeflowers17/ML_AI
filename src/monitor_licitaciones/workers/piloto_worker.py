@@ -7,8 +7,8 @@ que la UI no necesita reiniciar el worker al cambiar la configuración.
 """
 
 import time
-from datetime import datetime
-from typing import Callable, Optional
+from datetime import datetime, timedelta
+from typing import Any, Callable, Optional
 
 from PySide6.QtCore import QThread, Signal
 
@@ -19,8 +19,16 @@ from monitor_licitaciones.config import (
     PILOTO_ULTIMA_EJECUCION,
     PILOTO_ULTIMO_ERROR,
 )
+from monitor_licitaciones.domain.scoring.gestor_reglas import GestorReglas
+from monitor_licitaciones.infrastructure.api.cliente_mp import ClienteAPI
 from monitor_licitaciones.infrastructure.database.repositorio_configuracion import (
     RepositorioConfiguracion,
+)
+from monitor_licitaciones.infrastructure.database.repositorio_licitaciones import (
+    RepositorioLicitaciones,
+)
+from monitor_licitaciones.infrastructure.database.repositorio_reglas import (
+    RepositorioReglas,
 )
 
 
@@ -50,9 +58,17 @@ class PilotoWorker(QThread):
     def __init__(
         self,
         repo_config: RepositorioConfiguracion,
+        cliente_mp: ClienteAPI | None = None,
+        repo_licitaciones: RepositorioLicitaciones | None = None,
+        repo_reglas: RepositorioReglas | None = None,
+        gestor_reglas: GestorReglas | None = None,
     ) -> None:
         super().__init__()
         self._repo_config = repo_config
+        self._cliente_mp = cliente_mp
+        self._repo_licitaciones = repo_licitaciones
+        self._repo_reglas = repo_reglas
+        self._gestor_reglas = gestor_reglas
         self._ejecutando = True
 
     def run(self) -> None:
@@ -146,15 +162,42 @@ class PilotoWorker(QThread):
         self.error_ocurrido.emit(ultimo_error)
 
     def _ejecutar_extraccion_real(self) -> None:
-        """Ejecuta la extracción real (sobreescribible en tests).
+        """Ejecuta la extracción real para el día anterior.
 
-        En producción, esto crea y ejecuta un ExtraccionWorker para el
-        día anterior. La implementación concreta se completa cuando
-        ExtraccionWorker esté disponible.
+        Crea un ``ExtraccionWorker`` con las dependencias inyectadas y
+        ejecuta ``run()`` de forma síncrona dentro del hilo del piloto.
+        Si faltan dependencias, lanza ``RuntimeError`` que es capturado
+        por el mecanismo de reintentos en ``_ejecutar_con_reintentos``.
         """
-        # Placeholder: en producción lanzaría ExtraccionWorker
-        # para el rango del día anterior.
-        pass
+        # Validar dependencias
+        if not all([
+            self._cliente_mp,
+            self._repo_licitaciones,
+            self._repo_reglas,
+            self._gestor_reglas,
+        ]):
+            raise RuntimeError(
+                "PilotoWorker no tiene todas las dependencias para "
+                "ejecutar extracción real. Inyecte cliente_mp, "
+                "repo_licitaciones, repo_reglas y gestor_reglas."
+            )
+
+        ayer = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        from monitor_licitaciones.workers.extraccion_worker import (
+            ExtraccionWorker,
+        )
+
+        worker = ExtraccionWorker(
+            fecha_inicio=ayer,
+            fecha_fin=ayer,
+            cliente_mp=self._cliente_mp,
+            repo_licitaciones=self._repo_licitaciones,
+            repo_reglas=self._repo_reglas,
+            gestor_reglas=self._gestor_reglas,
+        )
+        # Ejecución síncrona dentro del hilo del piloto
+        worker.run()
 
     def _sleep_interrumpible(self, segundos: int) -> None:
         """Duerme en intervalos de 1 segundo para permitir detener().

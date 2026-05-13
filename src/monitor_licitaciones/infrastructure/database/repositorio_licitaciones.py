@@ -14,6 +14,23 @@ from monitor_licitaciones.infrastructure.database.models import Licitacion
 class RepositorioLicitaciones:
     """Repositorio para la entidad Licitacion."""
 
+    def obtener_por_codigo(
+        self, codigo_externo: str
+    ) -> Licitacion | None:
+        """Busca una licitación por su código externo.
+
+        Args:
+            codigo_externo: Código único de la licitación.
+
+        Returns:
+            Instancia de Licitacion o ``None`` si no existe.
+        """
+        return (
+            self._session.query(Licitacion)
+            .filter(Licitacion.codigo_externo == codigo_externo)
+            .first()
+        )
+
     def __init__(self, session: Session):
         self._session = session
 

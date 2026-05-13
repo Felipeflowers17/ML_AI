@@ -21,6 +21,9 @@ from monitor_licitaciones.ui.dialogs.config_palabras_clave import (
     ConfigPalabrasClaveDialog,
 )
 from monitor_licitaciones.ui.dialogs.config_piloto import ConfigPilotoDialog
+from monitor_licitaciones.ui.dialogs.gestion_organismos import (
+    GestionOrganismosDialog,
+)
 from monitor_licitaciones.ui.widgets.filtro_busqueda import FiltroBusqueda
 from monitor_licitaciones.ui.widgets.indicadores_pipeline import (
     IndicadoresPipeline,
@@ -141,7 +144,10 @@ class MainWindow(QMainWindow):
         filtro = FiltroBusqueda()
 
         # Tabla de licitaciones
-        tabla = TablaLicitaciones(gestor_pipeline=self._gestor_pipeline)
+        tabla = TablaLicitaciones(
+            gestor_pipeline=self._gestor_pipeline,
+            repo_licitaciones=self._repo_licitaciones,
+        )
 
         # Conectar filtro a tabla
         filtro.texto_cambiado.connect(
@@ -186,12 +192,13 @@ class MainWindow(QMainWindow):
         wrapper_pk_layout.addWidget(self._dialog_palabras_clave)
         sub_tabs.addTab(wrapper_pk, "Palabras Clave")
 
-        # Organismos (placeholder)
+        # Organismos
+        self._dialog_organismos = GestionOrganismosDialog(
+            self._repo_reglas,
+        )
         wrapper_org = QWidget()
         org_layout = QVBoxLayout(wrapper_org)
-        org_layout.addWidget(
-            QLabel("Gestión de organismos (próximamente)")
-        )
+        org_layout.addWidget(self._dialog_organismos)
         sub_tabs.addTab(wrapper_org, "Organismos")
 
         # Piloto Automático

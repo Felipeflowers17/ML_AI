@@ -79,7 +79,9 @@ class TestPilotoWorker:
         spy_iniciada = QSignalSpy(worker.extraccion_iniciada)
 
         worker._ejecutando = True
-        with patch("monitor_licitaciones.workers.piloto_worker.time.sleep"):
+        with patch(
+            "monitor_licitaciones.workers.piloto_worker.time.sleep"
+        ), patch.object(worker, "_ejecutar_extraccion_real"):
             worker._iterar_ciclo()
             worker.detener()
 
@@ -109,7 +111,9 @@ class TestPilotoWorker:
         spy_iniciada = QSignalSpy(worker.extraccion_iniciada)
 
         worker._ejecutando = True
-        with patch("monitor_licitaciones.workers.piloto_worker.time.sleep"):
+        with patch(
+            "monitor_licitaciones.workers.piloto_worker.time.sleep"
+        ), patch.object(worker, "_ejecutar_extraccion_real"):
             worker._iterar_ciclo()
             ciclo_1_calls = spy_iniciada.count()
 
@@ -184,5 +188,93 @@ class TestPilotoWorker:
         claves_guardadas = [args[0] for args in args_list]
         assert PILOTO_ULTIMO_ERROR in claves_guardadas
 
+        assert spy_error.count() >= 1
+        worker.wait(1000)
+
+
+class TestEjecutarExtraccionReal:
+    """Tests para _ejecutar_extraccion_real() del PilotoWorker."""
+
+    def test_ejecuta_extraccion_para_dia_anterior(
+        self, qtbot, mock_repo_config
+    ):
+        """_ejecutar_extraccion_real() crea ExtraccionWorker con fecha del día anterior."""
+        from unittest.mock import MagicMock, patch
+        from datetime import datetime, timedelta
+
+        from monitor_licitaciones.workers.piloto_worker import PilotoWorker
+
+        ayer = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # Mock de las dependencias
+        mock_cliente = MagicMock()
+        mock_repo_lic = MagicMock()
+        mock_repo_reglas = MagicMock()
+        mock_gestor = MagicMock()
+
+        worker = PilotoWorker(
+            repo_config=mock_repo_config,
+            cliente_mp=mock_cliente,
+            repo_licitaciones=mock_repo_lic,
+            repo_reglas=mock_repo_reglas,
+            gestor_reglas=mock_gestor,
+        )
+
+        with patch(
+            "monitor_licitaciones.workers.extraccion_worker.ExtraccionWorker"
+        ) as mock_extraccion_cls:
+            mock_worker_instance = MagicMock()
+            mock_extraccion_cls.return_value = mock_worker_instance
+
+            worker._ejecutar_extraccion_real()
+
+            # Verificar que ExtraccionWorker se creó con los parámetros correctos
+            mock_extraccion_cls.assert_called_once_with(
+                fecha_inicio=ayer,
+                fecha_fin=ayer,
+                cliente_mp=mock_cliente,
+                repo_licitaciones=mock_repo_lic,
+                repo_reglas=mock_repo_reglas,
+                gestor_reglas=mock_gestor,
+            )
+            # Verificar que se ejecutó run()
+            mock_worker_instance.run.assert_called_once()
+
+    def test_lanza_error_sin_dependencias(
+        self, qtbot, mock_repo_config
+    ):
+        """Sin dependencias de extracción, lanza RuntimeError."""
+        from monitor_licitaciones.workers.piloto_worker import PilotoWorker
+
+        worker = PilotoWorker(repo_config=mock_repo_config)
+
+        with pytest.raises(RuntimeError, match="no tiene todas las dependencias"):
+            worker._ejecutar_extraccion_real()
+
+        worker.wait(1000)
+
+    def test_reintentos_capturan_error_de_dependencias(
+        self, qtbot, mock_repo_config
+    ):
+        """El RuntimeError de dependencias faltantes es capturado por reintentos."""
+        from monitor_licitaciones.workers.piloto_worker import PilotoWorker
+        from datetime import datetime
+
+        worker = PilotoWorker(repo_config=mock_repo_config)
+        spy_error = QSignalSpy(worker.error_ocurrido)
+
+        with patch(
+            "monitor_licitaciones.workers.piloto_worker.time.sleep"
+        ):
+            worker._ejecutar_con_reintentos(datetime.now())
+
+        # Debe haber emitido error_ocurrido porque _ejecutar_extraccion_real()
+        # falla con RuntimeError al no tener dependencias
+        args_list = [
+            call_args[0]
+            for call_args in mock_repo_config.guardar.call_args_list
+        ]
+        claves_guardadas = [args[0] for args in args_list]
+        assert PILOTO_ULTIMO_ERROR in claves_guardadas
         assert spy_error.count() >= 1
         worker.wait(1000)
