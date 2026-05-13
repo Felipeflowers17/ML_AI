@@ -4,10 +4,11 @@ Siete métodos que cubren inserción, actualización, búsqueda paginada,
 conteo por etapa y actualización de score y etapa.
 """
 
-from monitor_licitaciones.config import ETAPAS_ACTIVAS
-from monitor_licitaciones.infrastructure.database.models import Licitacion
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
+
+from monitor_licitaciones.config import ETAPAS_ACTIVAS
+from monitor_licitaciones.infrastructure.database.models import Licitacion
 
 
 class RepositorioLicitaciones:

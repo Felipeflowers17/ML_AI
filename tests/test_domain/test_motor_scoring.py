@@ -5,12 +5,11 @@ Cada test describe comportamiento esperado del motor de scoring sin
 ninguna dependencia de infraestructura.
 """
 
-import pytest
-from monitor_licitaciones.domain.scoring.tipos import ReglaScoring
 from monitor_licitaciones.domain.scoring.motor_scoring import (
-    evaluar_titulo,
     evaluar_detalle,
+    evaluar_titulo,
 )
+from monitor_licitaciones.domain.scoring.tipos import ReglaScoring
 
 # ---------------------------------------------------------------------------
 # Fixture de reglas para todos los tests de scoring

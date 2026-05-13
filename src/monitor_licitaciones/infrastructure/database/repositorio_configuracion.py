@@ -3,8 +3,9 @@
 Tres métodos para obtener, guardar y listar toda la configuración.
 """
 
-from monitor_licitaciones.infrastructure.database.models import Configuracion
 from sqlalchemy.orm import Session
+
+from monitor_licitaciones.infrastructure.database.models import Configuracion
 
 
 class RepositorioConfiguracion:

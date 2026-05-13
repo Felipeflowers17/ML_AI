@@ -4,11 +4,12 @@ Cinco métodos que cubren CRUD de palabras clave (con soft delete)
 y consulta/actualización de puntajes de organismos.
 """
 
+from sqlalchemy.orm import Session
+
 from monitor_licitaciones.infrastructure.database.models import (
     Organismo,
     PalabraClave,
 )
-from sqlalchemy.orm import Session
 
 
 class RepositorioReglas:

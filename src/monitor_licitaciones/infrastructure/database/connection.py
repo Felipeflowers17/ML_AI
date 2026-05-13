@@ -10,9 +10,10 @@ automáticamente. Usar así::
 
 from contextlib import contextmanager
 
-from monitor_licitaciones.infrastructure.database.models import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+from monitor_licitaciones.infrastructure.database.models import Base
 
 # ── Engine global (lazy: se configura al importar por primera vez) ───
 _engine = None

@@ -10,6 +10,7 @@ from typing import Any
 
 import requests
 from loguru import logger
+
 from monitor_licitaciones.config import (
     API_BASE_RETRASO,
     API_MAX_INTENTOS,

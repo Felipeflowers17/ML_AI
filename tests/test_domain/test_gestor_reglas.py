@@ -6,8 +6,9 @@ y que las snapshots son copias independientes.
 """
 
 import threading
-from monitor_licitaciones.domain.scoring.tipos import ReglaScoring
+
 from monitor_licitaciones.domain.scoring.gestor_reglas import GestorReglas
+from monitor_licitaciones.domain.scoring.tipos import ReglaScoring
 
 
 def _reglas_muestra() -> list[ReglaScoring]:

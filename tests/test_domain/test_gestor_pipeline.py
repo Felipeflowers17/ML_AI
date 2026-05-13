@@ -7,7 +7,6 @@ las reglas del pipeline definidas en el diseño.
 
 from monitor_licitaciones.domain.pipeline.gestor_pipeline import (
     GestorPipeline,
-    TRANSICIONES_VALIDAS,
 )
 
 
