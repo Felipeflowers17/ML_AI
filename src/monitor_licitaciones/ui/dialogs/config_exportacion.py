@@ -40,6 +40,8 @@ class ConfigExportacionDialog(QDialog):
         self._factory = exportacion_worker_factory
         self._worker = None
         self._directorio = ""
+        self._pendientes: list[tuple[str, str]] = []  # (etapa, formato) por procesar
+        self._archivos_generados: list[str] = []
 
         self.setWindowTitle("Exportar Licitaciones")
         self.setMinimumWidth(450)
@@ -122,7 +124,11 @@ class ConfigExportacionDialog(QDialog):
             self._validar()
 
     def _iniciar_exportacion(self):
-        """Inicia la exportación para cada etapa y formato seleccionados."""
+        """Inicia la exportación encadenada para todas las etapas y formatos.
+
+        Procesa una combinación (etapa, formato) a la vez, en serie.
+        Cada worker termina antes de lanzar el siguiente.
+        """
         etapas = [
             etapa
             for etapa, chk in self._chk_etapas.items()
@@ -142,22 +148,46 @@ class ConfigExportacionDialog(QDialog):
             )
             return
 
+        # Generar todas las combinaciones (etapa, formato)
+        self._pendientes = [
+            (etapa, fmt) for etapa in etapas for fmt in formatos
+        ]
+        self._archivos_generados = []
+
         self._btn_exportar.setEnabled(False)
         self._progress.setVisible(True)
         self._progress.setValue(0)
 
-        # Por simplicidad, exportar la primera etapa seleccionada en el
-        # primer formato. La factory crea el worker.
-        for etapa in etapas:
-            for fmt in formatos:
-                # Crear worker para esta combinación etapa/formato
-                self._worker = self._factory(etapa, fmt, self._directorio)
-                self._worker.avance.connect(self._on_avance)
-                self._worker.finalizado.connect(self._on_finalizado)
-                self._worker.error.connect(self._on_error)
-                self._worker.start()
-                # Solo la primera combinación por ahora
-                return
+        self._iniciar_siguiente()
+
+    def _iniciar_siguiente(self) -> None:
+        """Lanza el worker para la siguiente combinación pendiente."""
+        if not self._pendientes:
+            # Ya no hay más — mostrar resultado final
+            self._progress.setVisible(False)
+            self._btn_exportar.setEnabled(True)
+
+            if self._archivos_generados:
+                lista = "\n".join(f"  • {f}" for f in self._archivos_generados)
+                QMessageBox.information(
+                    self,
+                    "Exportación completada",
+                    f"Archivos generados ({len(self._archivos_generados)}):\n{lista}",
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Exportación",
+                    "No hay datos para exportar en los filtros seleccionados.",
+                )
+            return
+
+        etapa, fmt = self._pendientes.pop(0)
+        self._worker = self._factory(etapa, fmt, self._directorio)
+        self._worker.avance.connect(self._on_avance)
+        self._worker.finalizado.connect(self._on_finalizado)
+        self._worker.error.connect(self._on_error)
+        self._worker.start()
 
     def _on_avance(self, actual: int, total: int):
         """Actualiza la barra de progreso."""
@@ -166,27 +196,24 @@ class ConfigExportacionDialog(QDialog):
             self._progress.setValue(actual)
 
     def _on_finalizado(self, ruta: str):
-        """Maneja la finalización exitosa de la exportación."""
-        self._progress.setVisible(False)
-        self._btn_exportar.setEnabled(True)
+        """Maneja la finalización exitosa de una exportación individual.
 
+        Acumula la ruta y lanza la siguiente combinación pendiente,
+        o muestra el resultado final si ya no hay más.
+        """
         if ruta:
-            QMessageBox.information(
-                self,
-                "Exportación completada",
-                f"Archivo generado:\n{ruta}",
-            )
-        else:
-            QMessageBox.information(
-                self,
-                "Exportación",
-                "No hay datos para exportar en los filtros seleccionados.",
-            )
+            self._archivos_generados.append(ruta)
+
+        # Avanzar a la siguiente combinación (o mostrar final)
+        self._iniciar_siguiente()
 
     def _on_error(self, mensaje: str):
-        """Maneja un error durante la exportación."""
-        self._progress.setVisible(False)
-        self._btn_exportar.setEnabled(True)
+        """Maneja un error durante la exportación y continúa con la siguiente."""
         QMessageBox.critical(
-            self, "Error de exportación", f"Ocurrió un error:\n{mensaje}"
+            self,
+            "Error de exportación",
+            f"Ocurrió un error al exportar:\n{mensaje}\n\n"
+            f"Continuando con la siguiente exportación...",
         )
+        # Avanzar a la siguiente combinación
+        self._iniciar_siguiente()

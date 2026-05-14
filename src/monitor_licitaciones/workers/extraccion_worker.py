@@ -133,6 +133,20 @@ class ExtraccionWorker(QThread):
                             if isinstance(detalle.get("Comprador"), dict)
                             else ""
                         )
+                        nombre_org = (
+                            detalle.get("Comprador", {}).get("NombreOrganismo", "")
+                            if isinstance(detalle.get("Comprador"), dict)
+                            else ""
+                        )
+
+                        # Persistir organismo en BD (upsert por código)
+                        if codigo_org:
+                            self._repo_reglas.guardar_organismo({
+                                "codigo": codigo_org,
+                                "nombre": nombre_org or codigo_org,
+                                "puntaje_fijo": 0,
+                            })
+
                         puntaje_org = organismos.get(codigo_org, 0)
                         score_total = score_resumen + score_detalle + puntaje_org
 
@@ -145,6 +159,7 @@ class ExtraccionWorker(QThread):
                             "nombre": nombre,
                             "descripcion": descripcion,
                             "detalle_productos": productos_str,
+                            "codigo_organismo": codigo_org if codigo_org else None,
                             "fecha_publicacion": fecha_publicacion,
                             "score_resumen": score_resumen,
                             "score_detalle": score_detalle,

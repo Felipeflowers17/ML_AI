@@ -25,15 +25,20 @@ def engine():
 def session(engine):
     """Sesión SQLAlchemy con rollback automático al finalizar cada test.
 
-    Aislamiento total entre tests: cada uno parte con BD limpia.
+    Usa una transacción a nivel de conexión para aislar cada test.
+    Cualquier ``commit()`` interno (ej: repositorios) queda dentro de
+    esta transacción y se descarta al hacer ``rollback()`` de la conexión.
     """
-    SessionLocal = sessionmaker(bind=engine)
+    connection = engine.connect()
+    transaction = connection.begin()
+    SessionLocal = sessionmaker(bind=connection)
     sesion = SessionLocal()
     try:
         yield sesion
     finally:
-        sesion.rollback()
         sesion.close()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture(scope="session")

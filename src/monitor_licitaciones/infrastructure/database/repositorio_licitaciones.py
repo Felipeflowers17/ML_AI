@@ -148,6 +148,7 @@ class RepositorioLicitaciones:
                 if etapa_actual == "ignorada" and nueva_etapa == "candidata":
                     instancia.etapa = nueva_etapa
 
+        self._session.commit()
         return instancia
 
     def actualizar_etapa(
@@ -162,6 +163,7 @@ class RepositorioLicitaciones:
         if instancia is None:
             return False
         instancia.etapa = etapa
+        self._session.commit()
         return True
 
     def actualizar_score(
@@ -184,4 +186,5 @@ class RepositorioLicitaciones:
         instancia.score_detalle = score_detalle
         instancia.score_total = score_total
         instancia.justificacion_score = justificacion
+        self._session.commit()
         return True

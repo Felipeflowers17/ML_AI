@@ -42,6 +42,7 @@ class RepositorioReglas:
 
         instancia = PalabraClave(**datos)
         self._session.add(instancia)
+        self._session.commit()
         return instancia
 
     def eliminar_palabra_clave(self, id: int) -> bool:
@@ -54,6 +55,7 @@ class RepositorioReglas:
         if instancia is None:
             return False
         instancia.activa = False
+        self._session.commit()
         return True
 
     def obtener_organismos(self) -> list[Organismo]:
@@ -89,6 +91,7 @@ class RepositorioReglas:
 
         instancia = Organismo(**datos)
         self._session.add(instancia)
+        self._session.commit()
         return instancia
 
     def actualizar_puntaje_organismo(
@@ -103,4 +106,5 @@ class RepositorioReglas:
         if instancia is None:
             return False
         instancia.puntaje_fijo = puntaje
+        self._session.commit()
         return True

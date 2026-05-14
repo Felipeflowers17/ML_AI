@@ -228,10 +228,8 @@ class MainWindow(QMainWindow):
         # ScoringWorker finalizado → recargar pestañas e indicadores
         self._scoring_worker.finalizado.connect(self._on_scoring_completado)
 
-        # ExtraccionWorker finalizado → actualizar indicadores
-        self._extraccion_worker.finalizado.connect(
-            self._indicadores.actualizar
-        )
+        # ExtraccionWorker finalizado → recargar pestañas e indicadores
+        self._extraccion_worker.finalizado.connect(self._on_scoring_completado)
 
         # Palabras clave cambiadas → lanzar ScoringWorker
         self._dialog_palabras_clave.reglas_cambiadas.connect(

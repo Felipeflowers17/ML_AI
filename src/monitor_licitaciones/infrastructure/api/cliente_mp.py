@@ -97,7 +97,7 @@ class ClienteAPI:
         """
         params: dict[str, str] = {
             "ticket": self._ticket,
-            "fechaPublicacion": fecha,
+            "fecha": fecha,
         }
         resp = self._request(params)
         if resp is None or resp.status_code != 200:
@@ -140,7 +140,20 @@ class ClienteAPI:
 
         try:
             data = resp.json()
-            parsed = LicitacionDetalleAPI(**data)
+            # La API devuelve el detalle dentro de un envelope:
+            # {"Cantidad": 1, "Listado": [{"CodigoExterno": "...", ...}]}
+            # pero algunos endpoints pueden devolverlo directamente.
+            if "Listado" in data:
+                listado = data.get("Listado", [])
+                if not listado:
+                    logger.warning(
+                        "Detalle de {}: Listado vacío en envelope",
+                        codigo_externo,
+                    )
+                    return None
+                parsed = LicitacionDetalleAPI(**listado[0])
+            else:
+                parsed = LicitacionDetalleAPI(**data)
             return parsed.model_dump()
         except Exception as e:
             logger.error(

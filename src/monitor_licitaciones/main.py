@@ -80,6 +80,7 @@ def main() -> None:
     from monitor_licitaciones.domain.scoring.gestor_reglas import GestorReglas
     from monitor_licitaciones.domain.pipeline.gestor_pipeline import GestorPipeline
     from monitor_licitaciones.infrastructure.api.cliente_mp import ClienteAPI
+    from monitor_licitaciones.workers.exportacion_worker import ExportacionWorker
     from monitor_licitaciones.workers.extraccion_worker import ExtraccionWorker
     from monitor_licitaciones.workers.scoring_worker import ScoringWorker
     from monitor_licitaciones.workers.piloto_worker import PilotoWorker
@@ -90,19 +91,36 @@ def main() -> None:
     engine = create_engine(db_url, pool_pre_ping=True)
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    session = SessionLocal()
+
+    # Sesión separada para UI (solo lectura de datos commiteados)
+    session_ui = SessionLocal()
+
+    # Sesiones INDIVIDUALES por worker (thread safety)
+    session_extraccion = SessionLocal()
+    session_scoring = SessionLocal()
+    session_piloto = SessionLocal()
 
     # ── Repositorios ─────────────────────────────────────────────────
-    repo_licitaciones = RepositorioLicitaciones(session)
-    repo_reglas = RepositorioReglas(session)
-    repo_config = RepositorioConfiguracion(session)
+    repo_licitaciones_ui = RepositorioLicitaciones(session_ui)
+    repo_reglas_ui = RepositorioReglas(session_ui)
+    repo_config_ui = RepositorioConfiguracion(session_ui)
+
+    repo_licitaciones_extraccion = RepositorioLicitaciones(session_extraccion)
+    repo_reglas_extraccion = RepositorioReglas(session_extraccion)
+
+    repo_licitaciones_scoring = RepositorioLicitaciones(session_scoring)
+    repo_reglas_scoring = RepositorioReglas(session_scoring)
+
+    repo_licitaciones_piloto = RepositorioLicitaciones(session_piloto)
+    repo_reglas_piloto = RepositorioReglas(session_piloto)
+    repo_config_piloto = RepositorioConfiguracion(session_piloto)
 
     # ── Dominio ──────────────────────────────────────────────────────
     gestor_reglas = GestorReglas()
     gestor_pipeline = GestorPipeline()
 
-    # Recargar reglas desde BD
-    palabras = repo_reglas.obtener_palabras_clave()
+    # Recargar reglas desde BD (usamos UI para carga inicial)
+    palabras = repo_reglas_ui.obtener_palabras_clave()
     reglas = mapear_reglas(palabras)
     gestor_reglas.recargar(reglas)
 
@@ -119,24 +137,36 @@ def main() -> None:
             fecha_inicio=fecha_inicio,
             fecha_fin=fecha_fin,
             cliente_mp=cliente_mp,
-            repo_licitaciones=repo_licitaciones,
-            repo_reglas=repo_reglas,
+            repo_licitaciones=repo_licitaciones_extraccion,
+            repo_reglas=repo_reglas_extraccion,
             gestor_reglas=gestor_reglas,
+        )
+
+    # ExportacionWorker se crea bajo demanda vía factory (sesión propia)
+    def crear_exportacion_worker(
+        etapa: str, formato: str, directorio: str
+    ) -> ExportacionWorker:
+        session_exp = SessionLocal()
+        return ExportacionWorker(
+            repo_licitaciones=RepositorioLicitaciones(session_exp),
+            etapa=etapa,
+            formato=formato,
+            directorio=directorio,
         )
 
     extraccion_worker = crear_extraccion_worker("", "")
 
     scoring_worker = ScoringWorker(
-        repo_licitaciones=repo_licitaciones,
-        repo_reglas=repo_reglas,
+        repo_licitaciones=repo_licitaciones_scoring,
+        repo_reglas=repo_reglas_scoring,
         gestor_reglas=gestor_reglas,
     )
 
     piloto_worker = PilotoWorker(
-        repo_config=repo_config,
+        repo_config=repo_config_piloto,
         cliente_mp=cliente_mp,
-        repo_licitaciones=repo_licitaciones,
-        repo_reglas=repo_reglas,
+        repo_licitaciones=repo_licitaciones_piloto,
+        repo_reglas=repo_reglas_piloto,
         gestor_reglas=gestor_reglas,
     )
 
@@ -148,14 +178,14 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     ventana = MainWindow(
-        repo_licitaciones=repo_licitaciones,
-        repo_reglas=repo_reglas,
-        repo_config=repo_config,
+        repo_licitaciones=repo_licitaciones_ui,
+        repo_reglas=repo_reglas_ui,
+        repo_config=repo_config_ui,
         gestor_reglas=gestor_reglas,
         gestor_pipeline=gestor_pipeline,
         extraccion_worker=extraccion_worker,
         scoring_worker=scoring_worker,
-        exportacion_worker_factory=crear_extraccion_worker,
+        exportacion_worker_factory=crear_exportacion_worker,
         piloto_worker=piloto_worker,
     )
     ventana.show()

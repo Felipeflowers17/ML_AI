@@ -48,6 +48,11 @@ class GestionOrganismosDialog(QDialog):
         self._setup_ui()
         self._cargar_datos()
 
+    def showEvent(self, event):
+        """Refresca datos cada vez que se muestra el diálogo."""
+        super().showEvent(event)
+        self._cargar_datos()
+
     def _setup_ui(self) -> None:
         """Construye la UI del diálogo."""
         layout = QVBoxLayout(self)
